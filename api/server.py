@@ -451,13 +451,25 @@ def trigger_demands():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            return f.read()
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "static", "index.html"),
+        os.path.join(os.path.dirname(__file__), "..", "public", "index.html"),
+        os.path.join(os.path.dirname(__file__), "..", "index.html"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            with open(c, "r", encoding="utf-8") as f:
+                return f.read()
     return "<h1>Agentic AI Platform</h1><p>Visit /docs for API documentation.</p>"
 
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Mount static files with fallback to public/static
+static_candidates = [
+    os.path.join(os.path.dirname(__file__), "static"),
+    os.path.join(os.path.dirname(__file__), "..", "public", "static"),
+    os.path.join(os.path.dirname(__file__), "..", "public"),
+]
+for s_dir in static_candidates:
+    if os.path.exists(s_dir):
+        app.mount("/static", StaticFiles(directory=s_dir), name="static")
+        break
 
