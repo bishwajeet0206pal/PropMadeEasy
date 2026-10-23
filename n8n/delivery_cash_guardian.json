@@ -1,0 +1,961 @@
+{
+  "name": "Delivery & Cash Guardian (Site Watcher + Money Desk)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 19
+            }
+          ]
+        }
+      },
+      "id": "1b73bbd4-57b7-4e58-a666-6463f0136177",
+      "name": "Every Day 7 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today is {{ $now.setZone(\"Asia/Kolkata\").toFormat(\"yyyy-MM-dd\") }} (IST). Review the project: compare the construction plan with the daily site updates and report status.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Site Watcher for a mid-size Hyderabad developer building an under-construction apartment project. Late delivery costs 10.70% a year (TG-RERA) on all money buyers paid, so early warning matters.\n\nTOOLS\n- read_construction_plan: stages with planned_start, planned_end, rera_possession_date, demand_percent, status (pending/in_progress/completed/demanded).\n- read_site_updates: daily phone-checklist entries from the site engineer: date, stage, percent_complete, labour_count, materials_issue, weather, blockers, photo_link.\n\nSTEPS\n1. Check whether a site update exists for today. If not, site_update_received = false and status at least \"watch\" (\"no daily update\" is itself a risk).\n2. For the stage in progress, compare actual percent_complete with planned percent (linear between planned_start and planned_end). Estimate days_behind.\n3. Status rules: on_track if days_behind <= 7; watch if 8-21 or repeated blockers (labour, material, weather) in last 7 days; at_risk if > 21 or the slip threatens the rera_possession_date.\n4. If today's update shows a stage at 100% and the plan row status is not \"demanded\", set completed_stage to that stage name and copy its photo_link.\n5. Draft an honest, plain buyer progress note. Never promise a new date - that is the project head's decision.\nOnly use data from the sheets. If data is missing, say so.",
+          "maxIterations": 8
+        }
+      },
+      "id": "c456421e-1b09-4b7c-be9e-d89bb6bc20ad",
+      "name": "Site Watcher Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "e0e59d1d-fb2c-4276-87c1-4c3b40acdc84",
+      "name": "Watcher Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        448
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Plan"
+        },
+        "options": {}
+      },
+      "id": "f0aec9ac-cfeb-433b-8806-e93b7ffecc01",
+      "name": "read_construction_plan",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        400,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Site Updates"
+        },
+        "options": {}
+      },
+      "id": "a0ef0a8f-c4c0-4139-bc14-3c3b010fed70",
+      "name": "read_site_updates",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        528,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"site_update_received\":{\"type\":\"boolean\",\"description\":\"Was a site update logged today\"},\"status\":{\"type\":\"string\",\"enum\":[\"on_track\",\"watch\",\"at_risk\"]},\"days_behind\":{\"type\":\"number\",\"description\":\"Days the current stage is behind plan (0 if on time)\"},\"risk_summary\":{\"type\":\"string\",\"description\":\"Plain explanation of what slipped and why, with evidence from the updates\"},\"recommended_actions\":{\"type\":\"string\"},\"completed_stage\":{\"type\":\"string\",\"description\":\"Name of a construction stage that was completed today per the update and is not yet demanded, else empty string\"},\"completed_stage_photo_link\":{\"type\":\"string\",\"description\":\"Photo/proof link for the completed stage from the site update, else empty\"},\"buyer_update_draft\":{\"type\":\"string\",\"description\":\"Short honest progress note for buyers (what was done, photos link, whether the date is at risk). Draft only.\"}},\"required\":[\"project\",\"site_update_received\",\"status\",\"days_behind\",\"risk_summary\",\"recommended_actions\",\"completed_stage\",\"completed_stage_photo_link\",\"buyer_update_draft\"]}"
+      },
+      "id": "d270a5c1-c46e-4ba5-9741-66d831c5201a",
+      "name": "Site Status Format",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        656,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}",
+            "agent": "Site Watcher",
+            "project": "={{ $json.output.project }}",
+            "status": "={{ $json.output.status }}",
+            "days_behind": "={{ $json.output.days_behind }}",
+            "summary": "={{ $json.output.risk_summary }}",
+            "completed_stage": "={{ $json.output.completed_stage }}"
+          },
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "agent",
+              "displayName": "agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "project",
+              "displayName": "project",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "days_behind",
+              "displayName": "days_behind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "completed_stage",
+              "displayName": "completed_stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2e9dc897-d951-43ff-b363-beb25eb68260",
+      "name": "Log Daily Site Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "status",
+              "leftValue": "={{ $(\"Site Watcher Agent\").item.json.output.status }}",
+              "rightValue": "on_track",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "noupdate",
+              "leftValue": "={{ $(\"Site Watcher Agent\").item.json.output.site_update_received }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "cecde8d4-0fe7-4979-9c38-37d8741a1e44",
+      "name": "Date at Risk or No Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#project-delivery"
+        },
+        "text": "=:warning: *{{ $(\"Site Watcher Agent\").item.json.output.project }}* is *{{ $(\"Site Watcher Agent\").item.json.output.status }}* ({{ $(\"Site Watcher Agent\").item.json.output.days_behind }} days behind){{ $(\"Site Watcher Agent\").item.json.output.site_update_received ? \"\" : \"\\n*No site update was logged today.*\" }}\n\n*What slipped:* {{ $(\"Site Watcher Agent\").item.json.output.risk_summary }}\n*Suggested actions:* {{ $(\"Site Watcher Agent\").item.json.output.recommended_actions }}\n\n*Draft buyer update (not sent):* {{ $(\"Site Watcher Agent\").item.json.output.buyer_update_draft }}\n\nAny new date or buyer message needs your approval. Delay interest is 10.70% a year on all money paid.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "689412f8-9a36-4f07-ac9b-1e2ae5384b36",
+      "name": "Warn Project Head",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1024,
+        128
+      ],
+      "webhookId": "2eaf42bb-fe3f-46d1-8915-1a74b899d64c"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "stage",
+              "leftValue": "={{ $(\"Site Watcher Agent\").item.json.output.completed_stage }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4eb223da-664b-4c70-9d4d-e80b13fa7977",
+      "name": "Stage Completed Today?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Completed stage: {{ $(\"Site Watcher Agent\").item.json.output.completed_stage }}\nProject: {{ $(\"Site Watcher Agent\").item.json.output.project }}\nPhoto proof: {{ $(\"Site Watcher Agent\").item.json.output.completed_stage_photo_link }}\nToday: {{ $now.setZone(\"Asia/Kolkata\").toFormat(\"yyyy-MM-dd\") }}\n\nPrepare the stage demand letter draft and the certificate pack.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Money Desk for a Hyderabad developer. When a construction stage completes you prepare (never send) the stage payment demand and the RERA 70% account withdrawal certificate pack. A person approves all money.\n\nTOOLS\n- read_stage_payment_plan: get demand_percent for the stage.\n- read_buyer_ledger: buyers with unit, agreement_value, paid_to_date, last_demanded_stage, phone.\n\nSTEPS\n1. Find demand_percent for the stage. Count buyers whose last_demanded_stage is not this stage. Total due = sum(agreement_value x demand_percent / 100).\n2. Draft a clear, polite demand letter: stage name, % due, how the amount is computed, due date 15 days from today, the photo proof link. No legal threats. Interest on late payment is only mentioned if valid progress proof exists.\n3. Draft the certificate pack checklist: Engineer (stage completion & quantity), Architect (completion % per approved plan), CA (money used vs. withdrawn from the 70% account) - each with the evidence to attach.\n4. List issues: missing proof, buyers with old dues, anything inconsistent.\nUse only sheet data. Never invent numbers.",
+          "maxIterations": 8
+        }
+      },
+      "id": "2bc36201-6828-4d9a-b76a-12974cea78b4",
+      "name": "Money Desk Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1152,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "255a5de2-19aa-4a13-83a5-b4695c3b6006",
+      "name": "Money Desk Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1024,
+        544
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Plan"
+        },
+        "options": {}
+      },
+      "id": "dfe93b15-9000-4e15-8ca3-cab4d43a857a",
+      "name": "read_stage_payment_plan",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1152,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Buyer Ledger"
+        },
+        "options": {}
+      },
+      "id": "0f6e88a9-8deb-40e6-b1e0-42b899c3ad9c",
+      "name": "read_buyer_ledger",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1280,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"},\"demand_percent\":{\"type\":\"number\"},\"buyers_count\":{\"type\":\"number\"},\"total_amount_due_inr\":{\"type\":\"number\"},\"letter_draft\":{\"type\":\"string\",\"description\":\"Stage demand letter draft naming the stage, the % due, the amount formula, due date (15 days) and photo proof link\"},\"certificate_pack\":{\"type\":\"string\",\"description\":\"Checklist for the 70% RERA account withdrawal: engineer, architect and CA certificates, with what each must certify and supporting evidence attached\"},\"issues\":{\"type\":\"string\",\"description\":\"Missing data or risks found (e.g. buyers with pending dues, missing photos). Empty if none\"}},\"required\":[\"stage\",\"demand_percent\",\"buyers_count\",\"total_amount_due_inr\",\"letter_draft\",\"certificate_pack\",\"issues\"]}"
+      },
+      "id": "74766825-6132-4cae-842e-a759af498fe6",
+      "name": "Demand Pack Format",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1408,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "sendAndWait",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#finance-approvals"
+        },
+        "message": "=:moneybag: *Stage demand ready for approval* - {{ $json.output.stage }} ({{ $json.output.demand_percent }}%)\nBuyers: {{ $json.output.buyers_count }} | Total due: ₹{{ $json.output.total_amount_due_inr.toLocaleString(\"en-IN\") }}\n\n*Letter draft:*\n{{ $json.output.letter_draft }}\n\n*Certificate pack (engineer / architect / CA):*\n{{ $json.output.certificate_pack }}\n\n*Issues:* {{ $json.output.issues || \"none\" }}\n\nApprove to send the demand letter to each buyer on WhatsApp.",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve & send",
+            "disapproveLabel": "Hold"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 3,
+              "resumeUnit": "days"
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "d0c02b1e-3b02-48df-8bc2-95f00a7e63b7",
+      "name": "Finance Head Approval",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1616,
+        320
+      ],
+      "webhookId": "1f48ec85-335d-43f2-b5d7-6e5e416b08cc"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "approved",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e8715fa3-a364-43e8-8b79-ab0db8ee46e2",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Buyer Ledger"
+        },
+        "options": {}
+      },
+      "id": "8bc70ec1-c028-47f4-9498-482e53a0c25f",
+      "name": "Read Buyer Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1552,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "stage",
+              "leftValue": "={{ $json.last_demanded_stage }}",
+              "rightValue": "={{ $(\"Money Desk Agent\").first().json.output.stage }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eae82eea-8221-4ea8-ba2d-623197c51f54",
+      "name": "Buyers Not Yet Demanded",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1776,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__WhatsApp Business phone number ID__>",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "template": "<__PLACEHOLDER_VALUE__Approved stage-demand template, format name|language e.g. stage_demand|en__>",
+        "components": {
+          "component": [
+            {
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "text": "={{ $json.buyer_name }}"
+                  },
+                  {
+                    "text": "={{ $(\"Money Desk Agent\").first().json.output.stage }}"
+                  },
+                  {
+                    "text": "={{ Math.round($json.agreement_value * $(\"Money Desk Agent\").first().json.output.demand_percent / 100).toLocaleString(\"en-IN\") }}"
+                  },
+                  {
+                    "text": "={{ $(\"Site Watcher Agent\").first().json.output.completed_stage_photo_link }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "82950daa-4f55-4238-bc0a-20fa49150abc",
+      "name": "Send Demand Letter",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        320
+      ],
+      "webhookId": "69e45a60-02bf-4f42-b82c-9a65262eadf9"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Guardian spreadsheet (tabs: Plan, Site Updates, Buyer Ledger, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Buyer Ledger"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "phone"
+          ],
+          "value": {
+            "phone": "={{ $(\"Buyers Not Yet Demanded\").item.json.phone }}",
+            "last_demanded_stage": "={{ $(\"Money Desk Agent\").first().json.output.stage }}",
+            "last_demand_date": "={{ $now.setZone(\"Asia/Kolkata\").toFormat(\"yyyy-MM-dd\") }}",
+            "last_demand_amount": "={{ Math.round($(\"Buyers Not Yet Demanded\").item.json.agreement_value * $(\"Money Desk Agent\").first().json.output.demand_percent / 100) }}"
+          },
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_demanded_stage",
+              "displayName": "last_demanded_stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "last_demand_date",
+              "displayName": "last_demand_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "last_demand_amount",
+              "displayName": "last_demand_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "682017a9-fe56-475f-941c-069a6e463f50",
+      "name": "Mark Stage Demanded",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2224,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Day 7 PM": {
+      "main": [
+        [
+          {
+            "node": "Site Watcher Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Site Watcher Agent": {
+      "main": [
+        [
+          {
+            "node": "Log Daily Site Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Watcher Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Site Watcher Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_construction_plan": {
+      "ai_tool": [
+        [
+          {
+            "node": "Site Watcher Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_site_updates": {
+      "ai_tool": [
+        [
+          {
+            "node": "Site Watcher Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Site Status Format": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Site Watcher Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Daily Site Status": {
+      "main": [
+        [
+          {
+            "node": "Date at Risk or No Update?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Stage Completed Today?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date at Risk or No Update?": {
+      "main": [
+        [
+          {
+            "node": "Warn Project Head",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage Completed Today?": {
+      "main": [
+        [
+          {
+            "node": "Money Desk Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Money Desk Agent": {
+      "main": [
+        [
+          {
+            "node": "Finance Head Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Money Desk Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Money Desk Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_stage_payment_plan": {
+      "ai_tool": [
+        [
+          {
+            "node": "Money Desk Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_buyer_ledger": {
+      "ai_tool": [
+        [
+          {
+            "node": "Money Desk Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demand Pack Format": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Money Desk Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finance Head Approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Read Buyer Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Buyer Ledger": {
+      "main": [
+        [
+          {
+            "node": "Buyers Not Yet Demanded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buyers Not Yet Demanded": {
+      "main": [
+        [
+          {
+            "node": "Send Demand Letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Demand Letter": {
+      "main": [
+        [
+          {
+            "node": "Mark Stage Demanded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "90a9128a-7bde-4b7e-9940-e4bf5d9c1b3c",
+  "meta": {
+    "instanceId": "d067075c72501eaeea6afcf83d7f5ffecd168a49c96f6adba6d626f42d5cde19"
+  },
+  "nodeGroups": [
+    {
+      "id": "5b229db5-5c7b-40db-b8f2-9504f431d41a",
+      "name": "Watch site progress",
+      "nodeIds": [
+        "c456421e-1b09-4b7c-be9e-d89bb6bc20ad",
+        "e0e59d1d-fb2c-4276-87c1-4c3b40acdc84",
+        "d270a5c1-c46e-4ba5-9741-66d831c5201a",
+        "f0aec9ac-cfeb-433b-8806-e93b7ffecc01",
+        "a0ef0a8f-c4c0-4139-bc14-3c3b010fed70",
+        "2e9dc897-d951-43ff-b363-beb25eb68260"
+      ],
+      "description": "Each evening compares the plan with the engineer's daily update, scores delay risk and logs it"
+    },
+    {
+      "id": "1c3e2ad9-0be0-4610-85bc-6978b261c022",
+      "name": "Warn project head early",
+      "nodeIds": [
+        "cecde8d4-0fe7-4979-9c38-37d8741a1e44",
+        "689412f8-9a36-4f07-ac9b-1e2ae5384b36"
+      ],
+      "description": "Flags slipping or unreported sites with causes, actions and a draft buyer note; new dates stay a human call"
+    },
+    {
+      "id": "9695e534-e88c-4f85-84c0-c947a28dc693",
+      "name": "Prepare stage demand",
+      "nodeIds": [
+        "4eb223da-664b-4c70-9d4d-e80b13fa7977",
+        "2bc36201-6828-4d9a-b76a-12974cea78b4",
+        "255a5de2-19aa-4a13-83a5-b4695c3b6006",
+        "74766825-6132-4cae-842e-a759af498fe6",
+        "dfe93b15-9000-4e15-8ca3-cab4d43a857a",
+        "0f6e88a9-8deb-40e6-b1e0-42b899c3ad9c",
+        "d0c02b1e-3b02-48df-8bc2-95f00a7e63b7"
+      ],
+      "description": "When a stage finishes, drafts the demand letter and engineer/architect/CA pack for finance approval"
+    },
+    {
+      "id": "c0c06bdd-2121-4b7b-818b-8e1cce78d703",
+      "name": "Send approved demands",
+      "nodeIds": [
+        "e8715fa3-a364-43e8-8b79-ab0db8ee46e2",
+        "8bc70ec1-c028-47f4-9498-482e53a0c25f",
+        "eae82eea-8221-4ea8-ba2d-623197c51f54",
+        "82950daa-4f55-4238-bc0a-20fa49150abc",
+        "682017a9-fe56-475f-941c-069a6e463f50"
+      ],
+      "description": "Only after finance approves: sends each pending buyer their letter with photo proof and updates the ledger"
+    }
+  ],
+  "id": "k70C4GV2ujuWKA0q",
+  "tags": []
+}

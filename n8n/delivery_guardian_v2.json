@@ -1,0 +1,173 @@
+{
+  "name": "Delivery and Cash Guardian (Site Watcher + Money Desk) - Hardened V2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 19 * * 1-6" }
+          ]
+        }
+      },
+      "id": "gd1-trigger",
+      "name": "Every Day 7 PM (Excl Sundays GD-I14)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Section 17D: Deterministic Date Maths for Schedule Variance (GD-I7)\nconst today = new Date();\nconst dayMs = 86400000;\n\n// Sample stage plan parameters\nconst plannedStart = new Date('2026-09-01');\nconst plannedEnd = new Date('2026-10-15');\nconst reraPossession = new Date('2028-03-31');\nconst actualPercent = 62.0;\nconst blockersCount = 1;\n\nconst totalDays = Math.max(1, (plannedEnd - plannedStart) / dayMs);\nconst elapsedDays = Math.max(0, (today - plannedStart) / dayMs);\nconst plannedPct = Math.min(100, Math.max(0, (elapsedDays / totalDays) * 100));\nconst daysBehind = Math.max(0, Math.round(((plannedPct - actualPercent) / 100) * totalDays));\n\nconst threatensRera = (plannedEnd.getTime() + (daysBehind * dayMs)) > reraPossession.getTime();\n\nlet status = 'on_track';\nif (daysBehind > 21 || threatensRera) {\n  status = 'at_risk';\n} else if (daysBehind > 7 || blockersCount >= 2) {\n  status = 'watch';\n}\n\nreturn [{\n  json: {\n    project_id: 'PRJ-GH-KOKAPET',\n    tower: 'Tower B',\n    stage: '7th Floor Slab',\n    planned_pct: Math.round(plannedPct),\n    actual_pct: actualPercent,\n    days_behind: daysBehind,\n    status: status,\n    site_update_received: true,\n    stage_claimed_complete: actualPercent >= 100.0\n  }\n}];"
+      },
+      "id": "gd2-date-math",
+      "name": "Code: Date Math Variance Calculator (GD-I7)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.status }}", "operation": "notEqual", "value2": "on_track" }
+          ]
+        }
+      },
+      "id": "gd3-if-risk",
+      "name": "IF: Schedule Watch or At Risk?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [560, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#project-delivery",
+        "message": "=⚠️ [SCHEDULE ALERT: {{ $json.status.toUpperCase() }}] {{ $json.tower }} is {{ $json.days_behind }} days behind plan on milestone '{{ $json.stage }}'.\\nActual Progress: {{ $json.actual_pct }}% vs Planned: {{ $json.planned_pct }}%.\\nPlease inspect site bottlenecks and initiate catch-up shift."
+      },
+      "id": "gd4-slack-warn",
+      "name": "Slack: Warn Project Head (G4)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [800, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.stage_claimed_complete }}", "value2": true }
+          ]
+        }
+      },
+      "id": "gd5-if-complete",
+      "name": "IF: Stage Claimed Complete? (GD-I1)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [560, 420]
+    },
+    {
+      "parameters": {
+        "channel": "#project-delivery",
+        "message": "=📋 [STAGE COMPLETION SIGN-OFF REQUIRED] Site Engineer reports {{ $json.tower }} '{{ $json.stage }}' reached 100%.\\nSign-off Gate (GD-I1): Site Engineer & Project Head must confirm physical structural completion with photo cube-test evidence before demand letters are prepared."
+      },
+      "id": "gd6-signoff-gate",
+      "name": "Slack: Stage Completion Sign-Off Gate (GD-I1)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [800, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Section 17E: Per-Buyer Demand Math & Batch Total (GD-I3 & GD-I4)\nconst stage = '7th Floor Slab';\nconst demandPct = 15.0; // 15% slab stage\nconst sampleLedger = [\n  { project_id: 'PRJ-GH-KOKAPET', unit_id: 'TB-1204', buyer_name: 'Ravi Kumar', phone: '+919876543210', agreement_value: 12502350, status: 'active', last_demanded_stage: '4th Floor Slab' },\n  { project_id: 'PRJ-GH-KOKAPET', unit_id: 'TA-804', buyer_name: 'Anita Sharma', phone: '+919876543211', agreement_value: 12757500, status: 'active', last_demanded_stage: '4th Floor Slab' }\n];\n\n// GD-I4: Filter by active status, project, valid phone, key by unit_id\nconst validBuyers = sampleLedger.filter(r => \n  r.project_id === 'PRJ-GH-KOKAPET' &&\n  r.status === 'active' &&\n  r.phone &&\n  r.last_demanded_stage !== stage\n);\n\n// GD-I3: Deterministic Code Node Arithmetic\nconst rows = validBuyers.map(r => ({\n  unit_id: r.unit_id,\n  buyer_name: r.buyer_name,\n  phone: r.phone,\n  agreement_value: r.agreement_value,\n  amount_due: Math.round(r.agreement_value * (demandPct / 100.0))\n}));\n\nconst totalDue = rows.reduce((acc, r) => acc + r.amount_due, 0);\nconst escrow70Amount = Math.round(totalDue * 0.70);\n\nreturn [{\n  json: {\n    stage: stage,\n    demand_percent: demandPct,\n    buyers_count: rows.length,\n    total_amount_due_inr: totalDue,\n    escrow_70_amount_inr: escrow70Amount,\n    rows: rows,\n    photo_proof: 'https://cdn.skyline.in/evidence/slab7_pour_completed.jpg'\n  }\n}];"
+      },
+      "id": "gd7-demand-math",
+      "name": "Code: Per-Buyer Demand Arithmetic (GD-I3, GD-I4)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 420]
+    },
+    {
+      "parameters": {
+        "channel": "#finance-approvals",
+        "message": "=💳 [MILESTONE DEMAND BATCH APPROVAL] Milestone '{{ $json.stage }}' complete.\\nBuyers to Demand: {{ $json.buyers_count }}\\nTotal Collections Due: ₹{{ $json.total_amount_due_inr.toLocaleString('en-IN') }}\\n70% Escrow Account Transfer: ₹{{ $json.escrow_70_amount_inr.toLocaleString('en-IN') }}\\nPhoto Proof Verified: {{ $json.photo_proof }}\\n\\nReply with 'APPROVE' to dispatch demand letters or 'HOLD' to pause."
+      },
+      "id": "gd8-finance-approval",
+      "name": "Slack: Finance Head Batch Approval Gate (G7-G8)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1280, 420]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "REPLACE_WITH_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "template": "payment_milestone_demand",
+        "templateParameters": {
+          "parameters": [
+            { "name": "buyer_name", "value": "={{ $json.buyer_name }}" },
+            { "name": "stage", "value": "={{ $json.stage }}" },
+            { "name": "amount", "value": "={{ $json.amount_due }}" },
+            { "name": "photo_url", "value": "={{ $json.photo_proof }}" }
+          ]
+        }
+      },
+      "id": "gd9-dispatch-demands",
+      "name": "WhatsApp: Send Demand Letters (G8)",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1520, 420]
+    }
+  ],
+  "connections": {
+    "Every Day 7 PM (Excl Sundays GD-I14)": {
+      "main": [
+        [
+          { "node": "Code: Date Math Variance Calculator (GD-I7)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Code: Date Math Variance Calculator (GD-I7)": {
+      "main": [
+        [
+          { "node": "IF: Schedule Watch or At Risk?", "type": "main", "index": 0 },
+          { "node": "IF: Stage Claimed Complete? (GD-I1)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF: Schedule Watch or At Risk?": {
+      "main": [
+        [
+          { "node": "Slack: Warn Project Head (G4)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF: Stage Claimed Complete? (GD-I1)": {
+      "main": [
+        [
+          { "node": "Slack: Stage Completion Sign-Off Gate (GD-I1)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Slack: Stage Completion Sign-Off Gate (GD-I1)": {
+      "main": [
+        [
+          { "node": "Code: Per-Buyer Demand Arithmetic (GD-I3, GD-I4)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Code: Per-Buyer Demand Arithmetic (GD-I3, GD-I4)": {
+      "main": [
+        [
+          { "node": "Slack: Finance Head Batch Approval Gate (G7-G8)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Slack: Finance Head Batch Approval Gate (G7-G8)": {
+      "main": [
+        [
+          { "node": "WhatsApp: Send Demand Letters (G8)", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

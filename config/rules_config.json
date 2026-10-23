@@ -1,0 +1,51 @@
+{
+  "governance": {
+    "organization": "Skyline Developers LLP",
+    "project": "Green Heights",
+    "jurisdiction": "Telangana (TG-RERA)",
+    "statutory_delay_interest_rate_pct": 10.70
+  },
+  "sales_closer_rules": {
+    "first_reply_sla_seconds": 300,
+    "discount_approval_limits": {
+      "sales_head_max_pct": 2.0,
+      "requires_owner_above_pct": 2.0,
+      "ai_permitted_discount_pct": 0.0
+    },
+    "helped_close_attribution": {
+      "attribution_window_days": 60,
+      "minimum_agent_touchpoints": 2,
+      "qualifying_actions": ["sent_cost_sheet", "scheduled_site_visit", "provided_loan_doc_kit", "resolved_buyer_doubts"]
+    },
+    "broker_commission_policy": {
+      "default_broker_commission_pct": 2.0,
+      "requires_finance_and_sales_head_approval": true,
+      "payout_condition": "Executed registered Agreement for Sale and minimum 10% booking amount realized"
+    },
+    "max_nudges_per_week": 2,
+    "opt_out_keywords": ["stop", "unsubscribe", "no", "not interested", "dont call"]
+  },
+  "delivery_guardian_rules": {
+    "daily_site_update_cutoff_time": "18:00",
+    "missing_update_escalation_days": 2,
+    "schedule_variance_thresholds_days": {
+      "on_track_max": 4,
+      "watch_min": 5,
+      "watch_max": 14,
+      "at_risk_min": 15
+    },
+    "external_date_promise_policy": "AI NEVER promises dates to buyers. Project Head and Owner exclusively approve date updates.",
+    "rera_escrow_withdrawal_rules": {
+      "escrow_percentage": 70,
+      "mandatory_certificates": [
+        {"role": "Project Engineer", "form": "Form 1 (Actual progress)"},
+        {"role": "Architect", "form": "Form 2 (Design & specification compliance)"},
+        {"role": "Chartered Accountant", "form": "Form 3 (Cost incurred vs actual spend)"}
+      ]
+    }
+  },
+  "approval_inbox_slas": {
+    "reminder_hours": 4,
+    "escalate_to_owner_hours": 24
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "project_id": "PRJ-GH-KOKAPET",
+  "project_name": "Green Heights",
+  "location": "Kokapet, Hyderabad, Telangana",
+  "rera_number": "P02400008899",
+  "rera_valid_until": "2028-12-31",
+  "developer_name": "Skyline Developers LLP",
+  "total_units": 200,
+  "towers": [
+    {
+      "name": "Tower A",
+      "floors": 14,
+      "current_stage": "8th slab completed",
+      "percent_done": 68
+    },
+    {
+      "name": "Tower B",
+      "floors": 14,
+      "current_stage": "8th floor slab casting (internal target)",
+      "percent_done": 62.0
+    },
+    {
+      "name": "Clubhouse",
+      "floors": 3,
+      "current_stage": "Basement excavation",
+      "percent_done": 25
+    }
+  ],
+  "possession_commitment_date": "2028-03-31",
+  "sanctioned_plans": {
+    "authority": "HMDA / GHMC",
+    "permit_number": "HMDA/DP/1294/2025",
+    "lifts_per_tower": 3,
+    "clubhouse_amenities": [
+      "Swimming Pool",
+      "Gym",
+      "Badminton Court",
+      "Co-working Lounge"
+    ]
+  },
+  "approved_banks_for_loans": [
+    "State Bank of India (SBI)",
+    "HDFC Bank",
+    "ICICI Bank",
+    "Axis Bank"
+  ],
+  "construction_linked_plan_stages": [
+    {
+      "stage_number": 1,
+      "milestone": "Booking Token",
+      "percentage": 10
+    },
+    {
+      "stage_number": 2,
+      "milestone": "Execution of Agreement for Sale",
+      "percentage": 10
+    },
+    {
+      "stage_number": 3,
+      "milestone": "Completion of Foundation & Plinth",
+      "percentage": 15
+    },
+    {
+      "stage_number": 4,
+      "milestone": "Completion of 4th Floor Slab",
+      "percentage": 15
+    },
+    {
+      "stage_number": 5,
+      "milestone": "Completion of 7th Floor Slab",
+      "percentage": 15
+    },
+    {
+      "stage_number": 6,
+      "milestone": "Completion of 12th Floor Slab",
+      "percentage": 15
+    },
+    {
+      "stage_number": 7,
+      "milestone": "Completion of Internal Plastering & Flooring",
+      "percentage": 10
+    },
+    {
+      "stage_number": 8,
+      "milestone": "Intimation of Possession & OC Receipt",
+      "percentage": 10
+    }
+  ],
+  "disclaimer": "This facts sheet is formally approved by the Project Owner. The AI Sales Closer and Cash Guardian are strictly restricted from quoting figures, dates, or specifications that contradict this sheet."
+}

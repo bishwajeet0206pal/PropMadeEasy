@@ -1,0 +1,1110 @@
+{
+  "name": "Sales Closer Agent (Lead to Booking)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "id": "c92f6faf-57a9-4bca-8df6-8bcc6ce5d01e",
+      "name": "Buyer WhatsApp Message",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "bcbb4e3c-b63b-4bd4-9378-110ced9403db"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-text",
+              "leftValue": "={{ $json.messages?.[0]?.text?.body ?? \"\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7589e062-3bde-4b11-b014-4d931a233755",
+      "name": "Only Buyer Text Messages",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "phone",
+              "value": "={{ $json.messages[0].from }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "buyer_name",
+              "value": "={{ $json.contacts?.[0]?.profile?.name ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "text",
+              "value": "={{ $json.messages[0].text.body }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "message_id",
+              "value": "={{ $json.messages[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "phone_number_id",
+              "value": "={{ $json.metadata.phone_number_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "received_at",
+              "value": "={{ $now.setZone(\"Asia/Kolkata\").toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d6430e10-8097-44c2-8c9e-0f9733414db8",
+      "name": "Catch the Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        496,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Buyer name: {{ $json.buyer_name }}\nBuyer phone: {{ $json.phone }}\nTime now (IST): {{ $json.received_at }}\n\nBuyer message:\n{{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Sales Closer for a mid-size residential developer in Hyderabad selling under-construction apartments. Your goal: carry each buyer from first message to a booking, quickly, honestly and politely, over WhatsApp.\n\nTOOLS\n- read_approved_facts: the ONLY source of project facts (project name, RERA number, amenities, possession date, payment plan, charges). Call it before stating any fact.\n- check_price_and_availability: the live price and availability list. Use it to match homes to the buyer and give the full all-in cost sheet (base price + every charge). If the list's last_updated date is older than 1 day, do NOT quote prices; say the sales team will share today's price and set handover_required = true (reason \"unsure\").\n- get_lead_record: what we already know about this buyer.\n- save_lead_record: call it EVERY turn to store what you learned (budget, timing, size, area, loan need, source, broker, temperature, stage, visit slot, next follow-up date, notes).\n- brief_sales_executive: call it once when a site visit is booked, with a short brief for the person meeting the buyer.\n\nHOW TO WORK (one lead, first message to booking)\n1. First reply: greet, name the project and always show the RERA number. Answer the first question from approved facts only.\n2. Ask the basics naturally (not all at once): budget, timing, size, area, home loan needed. Sort: hot / warm / not_now.\n3. Match homes from the availability list and share the all-in cost with every charge. No hidden costs.\n4. Offer site visit slots (10am-6pm, any day) and book one. Then brief the sales executive.\n5. After a visit: ask how it went, answer doubts, help with the home-loan paper checklist (PAN, Aadhaar, 6 months salary slips/ITR, 6 months bank statements, booking form, allotment letter) - general guidance only.\n6. If the buyer says no or asks to stop: thank them, set stage = lost and stop.\n\nHARD RULES - stop and hand over to a person (handover_required = true) when:\n- the buyer asks for a discount, offer, negotiation or special price (reason \"discount\")\n- any legal question, agreement terms, RERA dispute (reason \"legal\")\n- the buyer asks for a promise on a date beyond the approved possession date (reason \"date_promise\")\n- the buyer is upset or complaining (reason \"upset_buyer\")\n- the buyer wants to book / pay / sign papers (reason \"booking_papers\")\n- you are not sure, or the fact is not on the approved facts sheet (reason \"unsure\")\nIn those cases tell the buyer politely that a senior team member will reach out shortly. NEVER invent facts, prices, discounts, dates or legal advice.\n\nSTYLE: short WhatsApp messages (under 120 words), warm, simple English (reply in Hindi or Telugu if the buyer writes in it). No pressure tactics.\n\nReturn JSON with: reply, handover_required, handover_reason, lead_temperature, stage.",
+          "maxIterations": 12
+        }
+      },
+      "id": "197a433f-f57f-4e8d-8552-23bcd4dbed18",
+      "name": "Sales Closer Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1184,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "9f1386b8-1d02-433b-846d-c1c4b8fa5cd2",
+      "name": "OpenAI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        352
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Catch the Lead').item.json.phone }}",
+        "contextWindowLength": 15
+      },
+      "id": "07019c36-d0a3-48c5-8de9-ed2f3a686392",
+      "name": "Buyer Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        928,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Facts"
+        },
+        "options": {}
+      },
+      "id": "b44f929a-9613-4f45-b4a2-2dd42b5bde1c",
+      "name": "read_approved_facts",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1056,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Availability"
+        },
+        "options": {}
+      },
+      "id": "5949c03d-7e93-4fea-86ab-01f87edd273d",
+      "name": "check_price_and_availability",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1184,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "phone",
+              "lookupValue": "={{ $('Catch the Lead').item.json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "184e182c-ba95-4e63-90ea-da00afc67894",
+      "name": "get_lead_record",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1312,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "phone"
+          ],
+          "value": {
+            "phone": "={{ $('Catch the Lead').item.json.phone }}",
+            "buyer_name": "={{ $('Catch the Lead').item.json.buyer_name }}",
+            "source": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('source', 'Where the buyer came from: ad, portal, broker, walk-in, whatsapp, referral or unknown') }}",
+            "broker_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('broker_name', 'Name of the channel partner/broker if the buyer mentioned one, else empty') }}",
+            "budget": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('budget', 'Buyer budget in INR as stated, e.g. 80 lakh. Empty if unknown') }}",
+            "timing": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('timing', 'When the buyer wants to buy or move in. Empty if unknown') }}",
+            "size": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('size', 'Home size wanted, e.g. 2BHK, 3BHK. Empty if unknown') }}",
+            "area": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('area', 'Preferred location/area. Empty if unknown') }}",
+            "loan_needed": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('loan_needed', 'yes, no or unknown') }}",
+            "temperature": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('temperature', 'Lead sort: hot (budget fits, buying within 3 months), warm (fits but 3-12 months), not_now') }}",
+            "stage": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('stage', 'One of: new, qualifying, price_sent, visit_booked, visited, negotiating, booking_docs, booked, lost') }}",
+            "visit_slot": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('visit_slot', 'Agreed site visit date/time in ISO format if booked, else empty') }}",
+            "next_followup_date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('next_followup_date', 'Date (YYYY-MM-DD) for the next follow-up message, usually the day after a visit or 2 days after last reply') }}",
+            "notes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('notes', 'Short notes: doubts raised, homes shown, loan documents pending') }}",
+            "last_contact": "={{ $('Catch the Lead').item.json.received_at }}"
+          },
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "buyer_name",
+              "displayName": "buyer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "broker_name",
+              "displayName": "broker_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "timing",
+              "displayName": "timing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "size",
+              "displayName": "size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "area",
+              "displayName": "area",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "loan_needed",
+              "displayName": "loan_needed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "temperature",
+              "displayName": "temperature",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "visit_slot",
+              "displayName": "visit_slot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "next_followup_date",
+              "displayName": "next_followup_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "last_contact",
+              "displayName": "last_contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "19a3800b-3fec-4e40-84f3-1b4e0089bfa5",
+      "name": "save_lead_record",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1440,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#site-visits"
+        },
+        "text": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('brief', 'Short brief for the sales executive meeting this buyer at site: name, phone, visit slot, budget, size, loan need, doubts raised, homes shown') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "5f7a6ef7-cc48-46bd-8b5e-c33b52efac94",
+      "name": "brief_sales_executive",
+      "type": "n8n-nodes-base.slackTool",
+      "typeVersion": 2.7,
+      "position": [
+        1568,
+        352
+      ],
+      "webhookId": "477274e3-a367-402f-927e-3dba8f866f25"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"reply\":{\"type\":\"string\",\"description\":\"WhatsApp message to send to the buyer\"},\"handover_required\":{\"type\":\"boolean\"},\"handover_reason\":{\"type\":\"string\",\"description\":\"Empty if no handover. Else: discount, legal, date_promise, upset_buyer, booking_papers, unsure, other\"},\"lead_temperature\":{\"type\":\"string\"},\"stage\":{\"type\":\"string\"}},\"required\":[\"reply\",\"handover_required\",\"handover_reason\",\"lead_temperature\",\"stage\"]}"
+      },
+      "id": "cf2391fe-d103-49fa-ac89-653fca1af754",
+      "name": "Reply Format",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1696,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $(\"Catch the Lead\").item.json.phone_number_id }}",
+        "recipientPhoneNumber": "={{ $(\"Catch the Lead\").item.json.phone }}",
+        "textBody": "={{ $(\"Sales Closer Agent\").item.json.output.reply }}",
+        "additionalFields": {}
+      },
+      "id": "3968b81c-17ca-4494-aa72-ca534d9b46fe",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1904,
+        128
+      ],
+      "webhookId": "1f5da355-8f57-4704-809e-92481329f70d"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Audit Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $(\"Catch the Lead\").item.json.received_at }}",
+            "agent": "Sales Closer",
+            "phone": "={{ $(\"Catch the Lead\").item.json.phone }}",
+            "buyer_message": "={{ $(\"Catch the Lead\").item.json.text }}",
+            "agent_reply": "={{ $(\"Sales Closer Agent\").item.json.output.reply }}",
+            "stage": "={{ $(\"Sales Closer Agent\").item.json.output.stage }}",
+            "handover": "={{ $(\"Sales Closer Agent\").item.json.output.handover_required ? $(\"Sales Closer Agent\").item.json.output.handover_reason : \"\" }}"
+          },
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "agent",
+              "displayName": "agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "buyer_message",
+              "displayName": "buyer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "agent_reply",
+              "displayName": "agent_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "handover",
+              "displayName": "handover",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f64a0b08-3814-4a7c-b794-726404221bb3",
+      "name": "Write Audit Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1328,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "handover",
+              "leftValue": "={{ $(\"Sales Closer Agent\").item.json.output.handover_required }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "405805a9-0718-4f01-bdd1-fcb397990129",
+      "name": "Needs a Person?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#sales-approvals"
+        },
+        "text": "=:raising_hand: *Buyer needs a person* ({{ $(\"Sales Closer Agent\").item.json.output.handover_reason }})\n*Buyer:* {{ $(\"Catch the Lead\").item.json.buyer_name }} - +{{ $(\"Catch the Lead\").item.json.phone }}\n*Lead:* {{ $(\"Sales Closer Agent\").item.json.output.lead_temperature }} / {{ $(\"Sales Closer Agent\").item.json.output.stage }}\n*Buyer said:* {{ $(\"Catch the Lead\").item.json.text }}\n*Agent replied:* {{ $(\"Sales Closer Agent\").item.json.output.reply }}\n\nDiscounts, booking papers and date promises need your decision. Please call the buyer.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "f41e9a69-41bf-4fce-a403-83fe7ff3c3f6",
+      "name": "Hand Over to Sales Head",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1776,
+        128
+      ],
+      "webhookId": "559de1a5-6d14-404f-8cff-cfe499acd3b3"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "b34d58d8-9e6f-4d49-b866-c54ca14a4cf0",
+      "name": "Every Day 10:30 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "next_followup_date",
+              "lookupValue": "={{ $now.setZone(\"Asia/Kolkata\").toFormat(\"yyyy-MM-dd\") }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "67a3f2cc-d78a-4ff1-a758-aa4d4a0a874d",
+      "name": "Leads Due for Follow-up",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "not-booked",
+              "leftValue": "={{ $json.stage }}",
+              "rightValue": "booked",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "not-lost",
+              "leftValue": "={{ $json.stage }}",
+              "rightValue": "lost",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9b79b17c-3971-4b46-9903-65109b9c1af5",
+      "name": "Skip Booked or Lost",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "<__PLACEHOLDER_VALUE__WhatsApp Business phone number ID__>",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "template": "<__PLACEHOLDER_VALUE__Approved follow-up template, format name|language e.g. visit_followup|en__>",
+        "components": {
+          "component": [
+            {
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "text": "={{ $json.buyer_name || \"there\" }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "3d1d6f3e-6861-45f6-8083-71788939ca30",
+      "name": "Send Follow-up Template",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        352
+      ],
+      "webhookId": "0c586516-5748-4a9f-89a1-5d38286fd0d7"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Sales Closer spreadsheet (tabs: Facts, Availability, Leads, Audit Log)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "phone"
+          ],
+          "value": {
+            "phone": "={{ $(\"Skip Booked or Lost\").item.json.phone }}",
+            "next_followup_date": "",
+            "notes": "={{ ($(\"Skip Booked or Lost\").item.json.notes || \"\") + \" | follow-up sent \" + $now.setZone(\"Asia/Kolkata\").toFormat(\"yyyy-MM-dd\") }}"
+          },
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "next_followup_date",
+              "displayName": "next_followup_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b3fdcd7e-428c-4739-b504-e42af99f395a",
+      "name": "Clear Follow-up Date",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        944,
+        352
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Buyer WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Only Buyer Text Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Buyer Text Messages": {
+      "main": [
+        [
+          {
+            "node": "Catch the Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catch the Lead": {
+      "main": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sales Closer Agent": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buyer Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "read_approved_facts": {
+      "ai_tool": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_price_and_availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_lead_record": {
+      "ai_tool": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save_lead_record": {
+      "ai_tool": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "brief_sales_executive": {
+      "ai_tool": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Format": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Sales Closer Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reply": {
+      "main": [
+        [
+          {
+            "node": "Write Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Needs a Person?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs a Person?": {
+      "main": [
+        [
+          {
+            "node": "Hand Over to Sales Head",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Day 10:30 AM": {
+      "main": [
+        [
+          {
+            "node": "Leads Due for Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads Due for Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Skip Booked or Lost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Booked or Lost": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-up Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-up Template": {
+      "main": [
+        [
+          {
+            "node": "Clear Follow-up Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bd1804f4-de56-4b02-a546-b0e2cc4fbf91",
+  "meta": {
+    "instanceId": "d067075c72501eaeea6afcf83d7f5ffecd168a49c96f6adba6d626f42d5cde19"
+  },
+  "nodeGroups": [
+    {
+      "id": "15057548-955c-4870-81f3-36350b747bea",
+      "name": "Capture buyer message",
+      "nodeIds": [
+        "7589e062-3bde-4b11-b014-4d931a233755",
+        "d6430e10-8097-44c2-8c9e-0f9733414db8"
+      ],
+      "description": "Keeps real buyer texts from WhatsApp (ignores delivery receipts) and pulls out phone, name and message"
+    },
+    {
+      "id": "e17d439d-be59-408c-a824-0c3088f64a56",
+      "name": "Converse toward booking",
+      "nodeIds": [
+        "197a433f-f57f-4e8d-8552-23bcd4dbed18",
+        "9f1386b8-1d02-433b-846d-c1c4b8fa5cd2",
+        "07019c36-d0a3-48c5-8de9-ed2f3a686392",
+        "b44f929a-9613-4f45-b4a2-2dd42b5bde1c",
+        "5949c03d-7e93-4fea-86ab-01f87edd273d",
+        "184e182c-ba95-4e63-90ea-da00afc67894",
+        "19a3800b-3fec-4e40-84f3-1b4e0089bfa5",
+        "5f7a6ef7-cc48-46bd-8b5e-c33b52efac94",
+        "cf2391fe-d103-49fa-ac89-653fca1af754",
+        "3968b81c-17ca-4494-aa72-ca534d9b46fe"
+      ],
+      "description": "Answers only from approved facts and live prices, qualifies, books visits, updates the lead ledger, then replies"
+    },
+    {
+      "id": "84fa1df7-cf13-4170-8072-62f626a393dd",
+      "name": "Log and escalate",
+      "nodeIds": [
+        "f64a0b08-3814-4a7c-b794-726404221bb3",
+        "405805a9-0718-4f01-bdd1-fcb397990129",
+        "f41e9a69-41bf-4fce-a403-83fe7ff3c3f6"
+      ],
+      "description": "Saves every exchange to the audit log; discounts, legal, dates, upset buyers or bookings go to the sales head"
+    },
+    {
+      "id": "f8c2a0db-e368-412e-a557-d332aa7de0b5",
+      "name": "Daily buyer follow-up",
+      "nodeIds": [
+        "67a3f2cc-d78a-4ff1-a758-aa4d4a0a874d",
+        "9b79b17c-3971-4b46-9903-65109b9c1af5",
+        "3d1d6f3e-6861-45f6-8083-71788939ca30",
+        "b3fdcd7e-428c-4739-b504-e42af99f395a"
+      ],
+      "description": "Each morning nudges open leads whose follow-up is due today with an approved WhatsApp template"
+    }
+  ],
+  "id": "eVbXSZwuKxYRJap2",
+  "tags": []
+}

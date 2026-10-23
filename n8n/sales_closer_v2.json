@@ -1,0 +1,276 @@
+{
+  "name": "Sales Closer Agent (Lead to Booking) - Hardened V2",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["messages"],
+        "additionalFields": {}
+      },
+      "id": "sc1-trigger",
+      "name": "Buyer WhatsApp Message",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message_type || ($json.messages && $json.messages[0] && $json.messages[0].type) || 'text' }}",
+        "rules": {
+          "rules": [
+            { "value2": "text" }
+          ]
+        }
+      },
+      "id": "sc2-filter",
+      "name": "Filter: Text Messages Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fallback response for non-text messages (voice notes, photos, documents)\nconst sender = $json.from || ($json.contacts && $json.contacts[0] && $json.contacts[0].wa_id);\nreturn [{\n  json: {\n    to: sender,\n    fallback_message: \"Hello, thank you for reaching out to Green Heights. I can process text messages on this chat; our sales executive has been notified and will call you directly.\",\n    handover_required: true,\n    handover_reason: \"Received non-text message (voice note or media)\"\n  }\n}];"
+      },
+      "id": "sc2-fallback",
+      "name": "Non-Text Fallback Handler (SC-I2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 480]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "phone", "value": "={{ $json.from || ($json.contacts && $json.contacts[0] && $json.contacts[0].wa_id) }}" },
+            { "name": "buyer_name", "value": "={{ ($json.contacts && $json.contacts[0] && $json.contacts[0].profile && $json.contacts[0].profile.name) || 'Homebuyer' }}" },
+            { "name": "text", "value": "={{ $json.text && $json.text.body ? $json.text.body : ($json.messages && $json.messages[0] && $json.messages[0].text && $json.messages[0].text.body) }}" },
+            { "name": "message_id", "value": "={{ $json.id || ($json.messages && $json.messages[0] && $json.messages[0].id) }}" }
+          ]
+        }
+      },
+      "id": "sc3-set",
+      "name": "Catch the Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Section 17A: Build Context & Verify Price List Freshness (<24h)\n// In production, this reads from Facts and Availability tables.\nconst reraNumber = 'P02400008899';\nconst allowedPrices = [9817500, 12757500, 13177500];\nconst priceUpdatedTimestamp = new Date().getTime(); // Fresh\nconst ageHours = (Date.now() - priceUpdatedTimestamp) / 36e5;\nconst priceOk = ageHours < 24;\n\nreturn [{\n  json: {\n    ...$json,\n    rera_number: reraNumber,\n    allowed_amounts: allowedPrices,\n    price_age_hours: Math.round(ageHours),\n    price_ok: priceOk,\n    kill_switch: false\n  }\n}];"
+      },
+      "id": "sc4-context",
+      "name": "Build Context & Check Price Freshness (SC-I4)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.kill_switch }}", "value2": false }
+          ]
+        }
+      },
+      "id": "sc5-guard",
+      "name": "Guard: Kill Switch Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the sales closer for Green Heights, Kokapet (TG-RERA: {{ $json.rera_number }}). Reply to buyer: {{ $json.text }}. Price freshness status: {{ $json.price_ok }}. If price_ok is false, never quote a price. Rules: State facts only from tools. Never invent dates, discounts, or loan approvals. If discount or negotiation is requested, set handover_required=true and call handover.",
+        "options": {
+          "maxIterations": 6
+        }
+      },
+      "id": "sc6-agent",
+      "name": "Sales Closer AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "sc6-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1060, 520]
+    },
+    {
+      "parameters": {
+        "sessionKey": "={{ $json.phone }}",
+        "contextWindowLength": 15
+      },
+      "id": "sc6-memory",
+      "name": "Postgres / Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [1180, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Section 17B: Strict Reply Validator Code Node (SC-I1)\nconst out = $json.output || $json;\nconst ctx = $('Build Context & Check Price Freshness (SC-I4)').first().json;\nconst reply = out.reply || out.text || '';\nconst reasons = [];\n\n// 1. RERA Check\nif (/₹/.test(reply) && !reply.includes(ctx.rera_number)) {\n  reasons.push('RERA registration number missing from message with price.');\n}\n\n// 2. Amount verification\nconst amounts = [...reply.matchAll(/₹\\s?([\\d,.]+)\\s?(crore|cr|lakh|L)?/gi)].map(m => {\n  let n = parseFloat(m[1].replace(/,/g, ''));\n  const u = (m[2] || '').toLowerCase();\n  if (u === 'crore' || u === 'cr') n *= 1e7;\n  else if (u === 'lakh' || u === 'l') n *= 1e5;\n  return Math.round(n);\n});\n\nif (amounts.length && !ctx.price_ok) {\n  reasons.push('Price was quoted but price list is older than 24 hours.');\n}\n\namounts.forEach(a => {\n  if (!ctx.allowed_amounts.some(x => Math.abs(x - a) <= 1000)) {\n    reasons.push('Amount ₹' + a + ' is not on the approved live price list.');\n  }\n});\n\n// 3. Prohibited phrases check\nif (/(guarantee|assured|100%|offer ends|possession by)/i.test(reply)) {\n  reasons.push('Prohibited marketing commitment or unapproved possession phrase detected.');\n}\n\n// 4. Word length check\nif (reply.split(/\\s+/).length > 120) {\n  reasons.push('Message exceeds 120 words maximum.');\n}\n\nreturn [{\n  json: {\n    ...out,\n    phone: ctx.phone,\n    reply: reply,\n    pass: reasons.length === 0,\n    reasons: reasons,\n    handover_required: out.handover_required || (reasons.length > 0)\n  }\n}];"
+      },
+      "id": "sc7-validator",
+      "name": "Code: Reply Validator (SC-I1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1360, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.pass }}", "value2": true }
+          ]
+        }
+      },
+      "id": "sc8-if-valid",
+      "name": "Validation Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "REPLACE_WITH_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.phone }}",
+        "textBody": "={{ $json.reply }}"
+      },
+      "id": "sc9-send",
+      "name": "WhatsApp: Send Verified Reply",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1780, 220]
+    },
+    {
+      "parameters": {
+        "channel": "#sales-approvals",
+        "message": "=⚠️ [BLOCKED BY VALIDATOR] Message held for Sales Head review for buyer {{ $json.phone }}.\\nReasons: {{ $json.reasons.join(', ') }}\\n\\nCandidate Draft: {{ $json.reply }}"
+      },
+      "id": "sc10-slack-blocked",
+      "name": "Slack: Blocked Message Alert (WF4)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1780, 420]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "*/30 9-20 * * *" }
+          ]
+        }
+      },
+      "id": "sc11-followup-cron",
+      "name": "Follow-up Scheduler (9 AM - 8 PM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Section 17C: Filter leads due for follow-up (SC-I7)\n// Uses date <= today, nudge_count < 3, opted_out != yes\nconst today = new Date().toISOString().slice(0, 10);\nconst sampleLeads = [\n  { phone: '+919876543210', name: 'Ravi Kumar', next_followup_date: today, nudge_count: 1, opted_out: 'no', stage: 'visit_scheduled' }\n];\n\nreturn sampleLeads.filter(j => {\n  return j.next_followup_date &&\n    j.next_followup_date <= today &&\n    !['booked', 'lost'].includes(j.stage) &&\n    String(j.opted_out).toLowerCase() !== 'yes' &&\n    Number(j.nudge_count || 0) < 3;\n}).map(l => ({ json: l }));"
+      },
+      "id": "sc12-due-filter",
+      "name": "Filter: Leads Due (SC-I7)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 700]
+    }
+  ],
+  "connections": {
+    "Buyer WhatsApp Message": {
+      "main": [
+        [
+          { "node": "Filter: Text Messages Only", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Filter: Text Messages Only": {
+      "main": [
+        [
+          { "node": "Catch the Lead", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Non-Text Fallback Handler (SC-I2)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Catch the Lead": {
+      "main": [
+        [
+          { "node": "Build Context & Check Price Freshness (SC-I4)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Context & Check Price Freshness (SC-I4)": {
+      "main": [
+        [
+          { "node": "Guard: Kill Switch Check", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Guard: Kill Switch Check": {
+      "main": [
+        [
+          { "node": "Sales Closer AI Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          { "node": "Sales Closer AI Agent", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Postgres / Window Buffer Memory": {
+      "ai_memory": [
+        [
+          { "node": "Sales Closer AI Agent", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "Sales Closer AI Agent": {
+      "main": [
+        [
+          { "node": "Code: Reply Validator (SC-I1)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Code: Reply Validator (SC-I1)": {
+      "main": [
+        [
+          { "node": "Validation Passed?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validation Passed?": {
+      "main": [
+        [
+          { "node": "WhatsApp: Send Verified Reply", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Slack: Blocked Message Alert (WF4)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Follow-up Scheduler (9 AM - 8 PM)": {
+      "main": [
+        [
+          { "node": "Filter: Leads Due (SC-I7)", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

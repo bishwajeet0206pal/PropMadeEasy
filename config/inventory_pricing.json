@@ -1,0 +1,70 @@
+{
+  "last_updated": "2026-10-21T08:00:00+05:30",
+  "currency": "INR",
+  "base_rate_sqft": 7000,
+  "car_parking_charge": 300000,
+  "clubhouse_membership_charge": 300000,
+  "gst_percentage": 5,
+  "units": [
+    {
+      "unit_id": "TA-402",
+      "tower": "Tower A",
+      "floor": 4,
+      "unit_number": "402",
+      "bhk": 2,
+      "facing": "East",
+      "carpet_sqft": 950,
+      "super_builtup_sqft": 1250,
+      "base_price": 8750000,
+      "amenities_charges": 600000,
+      "gst_amount": 467500,
+      "all_inclusive_total": 9817500,
+      "status": "Available"
+    },
+    {
+      "unit_id": "TA-804",
+      "tower": "Tower A",
+      "floor": 8,
+      "unit_number": "804",
+      "bhk": 3,
+      "facing": "North-East",
+      "carpet_sqft": 1280,
+      "super_builtup_sqft": 1650,
+      "base_price": 11550000,
+      "amenities_charges": 600000,
+      "gst_amount": 607500,
+      "all_inclusive_total": 12757500,
+      "status": "Available"
+    },
+    {
+      "unit_id": "TB-1204",
+      "tower": "Tower B",
+      "floor": 12,
+      "unit_number": "1204",
+      "bhk": 3,
+      "facing": "East (Corner)",
+      "carpet_sqft": 1280,
+      "super_builtup_sqft": 1650,
+      "base_price": 11950000,
+      "amenities_charges": 600000,
+      "gst_amount": 627500,
+      "all_inclusive_total": 13177500,
+      "status": "Available"
+    },
+    {
+      "unit_id": "TB-701",
+      "tower": "Tower B",
+      "floor": 7,
+      "unit_number": "701",
+      "bhk": 2,
+      "facing": "West",
+      "carpet_sqft": 950,
+      "super_builtup_sqft": 1250,
+      "base_price": 8750000,
+      "amenities_charges": 600000,
+      "gst_amount": 467500,
+      "all_inclusive_total": 9817500,
+      "status": "Blocked"
+    }
+  ]
+}
